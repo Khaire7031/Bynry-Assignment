@@ -1,12 +1,14 @@
 package com.pdk.bynry.service;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import com.pdk.bynry.Dto.ProductRequest;
+import com.pdk.bynry.Exception.ApiException;
 import com.pdk.bynry.entity.Inventory;
 import com.pdk.bynry.entity.Product;
 
@@ -14,35 +16,41 @@ import com.pdk.bynry.entity.Product;
 public class ProductService {
 
     // Use RAM to store products and inventories
-    private final Map<Long, Product> products = new HashMap<>();
-    private final Map<Long, Inventory> inventories = new HashMap<>();
+    private final Map<String, Product> products = new ConcurrentHashMap<>();
+    private final Map<Long, Inventory> inventories = new ConcurrentHashMap<>();
+
     private final AtomicLong productIdCounter = new AtomicLong(1);
 
-    public Long addProduct(ProductRequest productRequest) {
-        // Add product to database
-        return addToDatabase(productRequest);
+    public String addProduct(ProductRequest productRequest) {
+        if (products.containsKey(productRequest.getSku())) {
+            throw new ApiException("Product with SKU " + productRequest.getSku() + " already exists.",
+                    HttpStatus.BAD_REQUEST);
+        }
+        // Add in products
+        Product product = productRequestToProduct(productRequest);
+
+        // Add in inventory
+        Inventory inventory = new Inventory(product.getId(), product.getWarehouseId(), product.getInitialQuantity());
+
+        // Add inventory and product to the maps
+        products.put(productRequest.getSku(), product);
+        inventories.put(product.getId(), inventory);
+
+        return product.getSku();
     }
 
-    public long addToDatabase(ProductRequest request) {
+    public Map<String, Product> getProducts() {
+        return products;
+    }
+
+    private Product productRequestToProduct(ProductRequest productRequest) {
         long productId = productIdCounter.getAndIncrement();
-
-        // Create product
-        Product product = new Product(
-                request.getName(),
-                request.getSku(),
-                request.getPrice(),
-                request.getWarehouseId(),
-                request.getInitialQuantity());
-
-        products.put(productId, product);
-
-        // Store product
-        Inventory inventory = new Inventory(
+        return new Product(
                 productId,
-                request.getWarehouseId(),
-                request.getInitialQuantity());
-
-        inventories.put(productId, inventory);
-        return productId;
+                productRequest.getName(),
+                productRequest.getSku(),
+                productRequest.getPrice(),
+                productRequest.getWarehouseId(),
+                productRequest.getInitialQuantity());
     }
 }
