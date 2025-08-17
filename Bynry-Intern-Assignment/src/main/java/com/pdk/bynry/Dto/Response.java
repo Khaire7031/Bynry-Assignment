@@ -9,5 +9,5 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class Response {
     private String message;
-    private long productId;
+    private String skuId;
 }
